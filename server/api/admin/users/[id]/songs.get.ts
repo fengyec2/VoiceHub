@@ -1,6 +1,6 @@
 import { db } from '~/drizzle/db'
 import { users, songs, votes, schedules } from '~/drizzle/schema'
-import { eq, desc, count } from 'drizzle-orm'
+import { eq, desc, count, inArray } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -58,6 +58,22 @@ export default defineEventHandler(async (event) => {
       played: songs.played
     }).from(songs).where(eq(songs.requesterId, userId)).orderBy(desc(songs.createdAt))
 
+    // 获取投稿歌曲的投票数
+    const submittedSongIds = submittedSongs.map(song => song.id)
+    let submittedVoteCountsMap = new Map()
+    if (submittedSongIds.length > 0) {
+      const submittedVoteCountsResult = await db.select({
+        songId: votes.songId,
+        voteCount: count(votes.id)
+      }).from(votes)
+      .where(inArray(votes.songId, submittedSongIds))
+      .groupBy(votes.songId)
+      
+      submittedVoteCountsResult.forEach(item => {
+        submittedVoteCountsMap.set(item.songId, item.voteCount)
+      })
+    }
+
     // 获取用户投票的歌曲
     const votedSongs = await db.select({
       id: votes.id,
@@ -75,6 +91,48 @@ export default defineEventHandler(async (event) => {
     .where(eq(votes.userId, userId))
     .orderBy(desc(votes.createdAt))
 
+    // 获取投票歌曲的投票数
+    const votedSongIds = votedSongs.map(vote => vote.songId).filter(id => id !== null)
+    let votedVoteCountsMap = new Map()
+    if (votedSongIds.length > 0) {
+      const votedVoteCountsResult = await db.select({
+        songId: votes.songId,
+        voteCount: count(votes.id)
+      }).from(votes)
+      .where(inArray(votes.songId, votedSongIds))
+      .groupBy(votes.songId)
+      
+      votedVoteCountsResult.forEach(item => {
+        votedVoteCountsMap.set(item.songId, item.voteCount)
+      })
+    }
+
+    // 获取投稿歌曲的排期状态
+    let submittedScheduleMap = new Map()
+    if (submittedSongIds.length > 0) {
+      const submittedScheduleResult = await db.select({
+        songId: schedules.songId
+      }).from(schedules)
+      .where(inArray(schedules.songId, submittedSongIds))
+      
+      submittedScheduleResult.forEach(item => {
+        submittedScheduleMap.set(item.songId, true)
+      })
+    }
+
+    // 获取投票歌曲的排期状态
+    let votedScheduleMap = new Map()
+    if (votedSongIds.length > 0) {
+      const votedScheduleResult = await db.select({
+        songId: schedules.songId
+      }).from(schedules)
+      .where(inArray(schedules.songId, votedSongIds))
+      
+      votedScheduleResult.forEach(item => {
+        votedScheduleMap.set(item.songId, true)
+      })
+    }
+
     return {
       user: {
         id: user.id,
@@ -89,16 +147,16 @@ export default defineEventHandler(async (event) => {
         artist: song.artist,
         createdAt: song.createdAt,
         played: song.played,
-        scheduled: false, // TODO: 需要单独查询 schedules
-        voteCount: 0 // TODO: 需要单独查询投票数
+        scheduled: submittedScheduleMap.has(song.id),
+        voteCount: submittedVoteCountsMap.get(song.id) || 0
       })),
       votedSongs: votedSongs.map(vote => ({
         id: vote.songId,
         title: vote.songTitle,
         artist: vote.songArtist,
         played: vote.songPlayed,
-        scheduled: false, // TODO: 需要单独查询 schedules
-        voteCount: 0, // TODO: 需要单独查询投票数
+        scheduled: votedScheduleMap.has(vote.songId),
+        voteCount: votedVoteCountsMap.get(vote.songId) || 0,
         votedAt: vote.createdAt,
         requester: {
           name: vote.requesterName,
