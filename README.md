@@ -69,7 +69,7 @@
 - **Drizzle ORM**：现代化数据库ORM，提供类型安全的数据库操作和高性能查询
 - **Neon Database**：Serverless PostgreSQL数据库，支持自动启停和无缝扩展
 - **PostgreSQL**：关系型数据库，支持复杂查询和事务处理
-- **Redis**：高性能缓存数据库，提升系统响应速度（可选）
+- **Redis**：高性能缓存数据库，提升系统响应速度（可选，暂不推荐，可能存在潜在的问题）
 - **JWT**：标准JWT认证机制，支持24小时token有效期
 - **bcrypt**：密码加密，安全的哈希算法
 - **Multer**：文件上传处理，支持多种存储方式
@@ -167,7 +167,7 @@ docker run \
   -p 3000:3000 \
   -e JWT_SECRET=your-very-secure-jwt-secret-key \
   -e DATABASE_URL="postgresql://username:password@host:port/database?sslmode=require" \
-  ghcr.nju.edc.cn/laoshuikaixue/voicehub:latest
+  ghcr.nju.edu.cn/laoshuikaixue/voicehub:latest
 ```
 
 ### Docker-compose 部署
@@ -219,7 +219,7 @@ volumes:
 ```
 services:
   voicehub:
-    image: ghcr.nju.edc.cn/laoshuikaixue/voicehub:latest
+    image: ghcr.nju.edu.cn/laoshuikaixue/voicehub:latest
     ports:
       - "3000:3000"
     environment:
@@ -253,7 +253,7 @@ volumes:
 ### 前提条件
 - Node.js 20+
 - PostgreSQL数据库（推荐Neon）
-- Redis数据库（可选）
+- Redis数据库（可选，暂不推荐，可能存在潜在的问题）
 
 ### 安装步骤
 
@@ -1063,7 +1063,7 @@ const transformMyNewSourceResponse = (response: any): any[] => {
 {
   id: string | number,           // 歌曲ID
   title: string,                 // 歌曲标题
-  artist: string,                // 艺术家
+  artist: string,                // 艺术家（多个艺术家使用 / 分隔）
   cover?: string,                // 封面图片URL
   album?: string,                // 专辑名称
   duration?: number,             // 时长（秒）
@@ -1076,6 +1076,12 @@ const transformMyNewSourceResponse = (response: any): any[] => {
   }
 }
 ```
+
+**注意**：为了确保歌曲重复匹配判断的准确性，所有音源返回的歌手信息都应使用 `/` 作为分隔符。例如：
+- 单个歌手：`"周深"`
+- 多个歌手：`"颜人中/VaVa娃娃"`
+
+这是为了保证各个音源的歌手格式保持一致，避免因分隔符不同导致的重复歌曲匹配失效。
 
 ##### 错误处理
 
@@ -1185,7 +1191,7 @@ const transformMusicApiResponse = (response: any): any[] => {
     return {
       id: song.id,
       title: song.name,
-      artist: song.artists?.map((a: any) => a.name).join(', ') || '未知艺术家',
+      artist: song.artists?.map((a: any) => a.name).join('/') || '未知艺术家',
       cover: song.album?.cover_url,
       album: song.album?.name,
       duration: song.duration_ms ? Math.floor(song.duration_ms / 1000) : undefined,
@@ -1228,6 +1234,8 @@ VoiceHub是一个开源的校园广播站点歌管理系统，本项目：
 ### UI设计
 
 特别感谢 [过客是个铁憨憨](https://github.com/1811304592) 为本项目提供首页UI样式设计
+
+感谢 [Awesome Iwb](https://github.com/awesome-iwb) 项目提供的统一遮罩风格的图标
 
 ### 贡献者
 
