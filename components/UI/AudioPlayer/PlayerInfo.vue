@@ -2,7 +2,7 @@
   <div class="player-info">
     <div class="cover-container">
       <template v-if="song.cover && !coverError">
-        <img :src="convertToHttps(song.cover)" alt="封面" class="player-cover" @error="handleImageError" />
+        <img :src="convertToHttps(song.cover)" alt="封面" class="player-cover" @error="handleImageError"/>
       </template>
       <div v-else class="text-cover">
         {{ getFirstChar(song.title || '') }}
@@ -16,8 +16,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { convertToHttps } from '~/utils/url'
+import {ref} from 'vue'
+import {convertToHttps} from '~/utils/url'
 
 const props = defineProps({
   song: {

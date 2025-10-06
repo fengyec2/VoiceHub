@@ -1,10 +1,26 @@
 /** 
  * 数据库清空脚本 
  * 这个脚本会清空所有表的数据，但保留表结构 
- */ 
-import { db, users, songs, votes, schedules, notifications, notificationSettings, playTimes, semesters, systemSettings, songBlacklists } from '../drizzle/db.ts'
+ */
+import {
+    db,
+    notifications,
+    notificationSettings,
+    playTimes,
+    schedules,
+    semesters,
+    songBlacklists,
+    songs,
+    systemSettings,
+    users,
+    votes,
+    apiKeys,
+    apiKeyPermissions,
+    apiLogs,
+    userStatusLogs,
+    emailTemplates
+} from '../drizzle/db.ts'
 import bcrypt from 'bcrypt'
-import { eq } from 'drizzle-orm'
 
 // 重置所有表的自增序列
 async function resetAutoIncrementSequences() {
@@ -18,7 +34,9 @@ async function resetAutoIncrementSequences() {
     'PlayTime',
     'Semester',
     'SystemSettings',
-    'SongBlacklist'
+    'SongBlacklist',
+    'EmailTemplate',
+    'user_status_logs'
   ]
   
   console.log('重置自增序列...')
@@ -49,6 +67,11 @@ async function main() {
     await db.delete(semesters)
     await db.delete(systemSettings)
     await db.delete(songBlacklists)
+    await db.delete(apiLogs)
+    await db.delete(apiKeyPermissions)
+    await db.delete(apiKeys)
+    await db.delete(userStatusLogs)
+    await db.delete(emailTemplates)
     await db.delete(users)
     
     console.log('数据库已清空，开始重置自增序列...')
