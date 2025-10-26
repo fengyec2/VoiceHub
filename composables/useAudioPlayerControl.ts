@@ -21,6 +21,9 @@ export const useAudioPlayerControl = () => {
     // 状态同步标记，避免双向触发
     const isSyncingFromGlobal = ref(false)
     const isLoadingNewSong = ref(false)
+    
+    // 歌曲切换加载状态（用于显示加载图标）
+    const isLoadingTrack = ref(false)
 
     // 进度条引用
     const progressBarRef = ref<HTMLElement | null>(null)
@@ -55,6 +58,10 @@ export const useAudioPlayerControl = () => {
                 await waitForCanPlay(audioPlayer.value)
             }
 
+            // 设置音频属性以支持自动播放
+            audioPlayer.value.autoplay = true
+            audioPlayer.value.preload = 'auto'
+
             const playPromise = audioPlayer.value.play()
 
             // 处理播放 Promise
@@ -65,6 +72,7 @@ export const useAudioPlayerControl = () => {
         } catch (error) {
             // 检查是否是自动播放被阻止的错误
             if (error.name === 'NotAllowedError') {
+                console.warn('[AudioPlayerControl] ⚠️ 自动播放被浏览器阻止，需要用户交互')
                 // 不设置 hasError，因为这不是真正的错误
                 return false
             } else {
@@ -92,13 +100,12 @@ export const useAudioPlayerControl = () => {
 
         try {
             audioPlayer.value.pause()
-            audioPlayer.value.currentTime = 0
-            currentTime.value = 0
-            progress.value = 0
-            isPlaying.value = false
+            audioPlayer.value.removeAttribute('src');
+            audioPlayer.value.load();
 
             // 清理歌词状态
             lyrics.clearLyrics()
+            resetState()
 
             return true
         } catch (error) {
@@ -154,7 +161,9 @@ export const useAudioPlayerControl = () => {
     const loadSong = async (songUrlOrSong: string | any, retryCount: number = 0): Promise<boolean> => {
         if (!audioPlayer.value) return false
 
+        stop()
         isLoadingNewSong.value = true
+        isLoadingTrack.value = true // 开始加载时设置加载状态
         hasError.value = false
 
         // 立即清空之前的歌词，避免显示上一首歌的歌词
@@ -174,10 +183,8 @@ export const useAudioPlayerControl = () => {
                     songUrl = songUrlOrSong.musicUrl
 
                     // 清理URL中的反引号和空格（特别是网易云备用源）
-                    if (typeof songUrl === 'string') {
-                        songUrl = songUrl.trim().replace(/`/g, '')
-                        console.log('使用已有的播放URL:', songUrl)
-                    }
+                    songUrl = songUrl.trim().replace(/`/g, '')
+                    console.log('使用已有的播放URL:', songUrl)
 
                     // 如果有音乐平台信息，加载歌词
                     if (songUrlOrSong.musicPlatform && songUrlOrSong.musicId) {
@@ -227,11 +234,13 @@ export const useAudioPlayerControl = () => {
             isLoadingNewSong.value = false
 
             // 自动开始播放
-            if (hasUserInteracted.value) {
-                console.log('用户已交互，自动开始播放')
-                await play()
+            console.log('尝试自动播放音乐')
+            const playResult = await play()
+            
+            if (!playResult) {
+                console.log('自动播放失败，可能被浏览器阻止，等待用户交互')
             } else {
-                console.log('用户未交互，等待用户手动播放')
+                console.log('自动播放成功')
             }
 
             return true
@@ -602,6 +611,7 @@ export const useAudioPlayerControl = () => {
     const onPlay = () => {
         isPlaying.value = true
         hasError.value = false
+        isLoadingTrack.value = false // 音频开始播放时立即清除加载状态
     }
 
     const onPause = () => {
@@ -655,6 +665,7 @@ export const useAudioPlayerControl = () => {
         isDragging.value = false
         isSyncingFromGlobal.value = false
         isLoadingNewSong.value = false
+        isLoadingTrack.value = false
     }
 
     // 强制更新位置（用于鸿蒙侧同步）
@@ -718,6 +729,7 @@ export const useAudioPlayerControl = () => {
         isDragging,
         isSyncingFromGlobal,
         isLoadingNewSong,
+        isLoadingTrack,
         progressBarRef,
         hasUserInteracted,
 
