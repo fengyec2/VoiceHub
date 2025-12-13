@@ -77,28 +77,83 @@
           </div>
 
           <!-- 音乐平台选择按钮 -->
-          <div class="platform-selection">
-            <button
-                :class="['platform-btn', { active: platform === 'netease' }]"
-                type="button"
-                @click="switchPlatform('netease')"
-            >
-              网易云音乐
-            </button>
-            <button
-                :class="['platform-btn', { active: platform === 'tencent' }]"
-                type="button"
-                @click="switchPlatform('tencent')"
-            >
-              QQ音乐
-            </button>
-            <button
-                :class="['platform-btn', { active: platform === 'bilibili' }]"
-                type="button"
-                @click="switchPlatform('bilibili')"
-            >
-              哔哩哔哩
-            </button>
+          <div class="platform-selection-container">
+            <div class="platform-selection">
+              <button
+                  :class="['platform-btn', { active: platform === 'netease' }]"
+                  type="button"
+                  @click="switchPlatform('netease')"
+              >
+                网易云音乐
+              </button>
+              <button
+                  :class="['platform-btn', { active: platform === 'tencent' }]"
+                  type="button"
+                  @click="switchPlatform('tencent')"
+              >
+                QQ音乐
+              </button>
+              <button
+                  :class="['platform-btn', { active: platform === 'bilibili' }]"
+                  type="button"
+                  @click="switchPlatform('bilibili')"
+              >
+                哔哩哔哩
+              </button>
+            </div>
+
+            <!-- 网易云音乐登录状态和选项 -->
+            <div v-if="platform === 'netease'" class="netease-options">
+              <div class="netease-header">
+                <div class="netease-badge">
+                  <span class="netease-dot"></span>
+                  <span class="netease-title">网易云音乐账号</span>
+                </div>
+                <button v-if="isNeteaseLoggedIn" class="logout-btn" type="button" @click="handleLogoutNetease">
+                  <Icon :size="14" name="logout"/>
+                  退出
+                </button>
+              </div>
+
+              <div v-if="!isNeteaseLoggedIn" class="login-entry">
+                <div class="login-desc">
+                  <p class="login-title">登录网易云音乐</p>
+                  <p class="login-hint">支持搜索您的个人歌单、收藏及播客内容</p>
+                </div>
+                <button class="login-btn" type="button" @click="showLoginModal = true">
+                  立即登录
+                </button>
+              </div>
+
+              <div v-else class="user-status">
+                <div class="user-info-row">
+                  <div class="user-profile">
+                    <img v-if="neteaseUser?.avatarUrl" :src="convertToHttps(neteaseUser.avatarUrl)" alt="avatar"
+                         class="user-avatar"/>
+                    <span class="user-name">{{ neteaseUser?.nickname || '已登录' }}</span>
+                  </div>
+                  <div class="search-type-switch">
+                    <label :class="['radio-label', { active: searchType === 1 }]">
+                      <input v-model="searchType" :value="1" type="radio"> 单曲
+                    </label>
+                    <label :class="['radio-label', { active: searchType === 1009 }]">
+                      <input v-model="searchType" :value="1009" type="radio"> 播客
+                    </label>
+                  </div>
+                </div>
+
+                <div class="user-actions-grid">
+                  <button class="action-btn" type="button" @click="showRecentSongsModal = true">
+                    <Icon :size="16" name="history"/>
+                    <span>最近播放</span>
+                  </button>
+                  <button class="action-btn" type="button" @click="showPlaylistModal = true">
+                    <Icon :size="16" name="playlist"/>
+                    <span>从歌单投稿</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="results-content">
@@ -118,7 +173,8 @@
                       class="result-item"
                   >
                     <div class="result-cover">
-                      <img :src="convertToHttps(result.cover)" alt="封面" class="cover-img" referrerpolicy="no-referrer"/>
+                      <img :src="convertToHttps(result.cover)" alt="封面" class="cover-img"
+                           referrerpolicy="no-referrer"/>
                       <div class="play-overlay" @click.stop="playSong(result)">
                         <div class="play-button-bg">
                           <Icon :size="24" color="white" name="play"/>
@@ -181,7 +237,9 @@
                           class="select-btn"
                           @click.stop.prevent="submitSong(result)"
                       >
-                        {{ submitting ? '投稿中...' : '选择投稿' }}
+                        {{
+                          submitting ? '处理中...' : (platform === 'netease' && searchType === 1009 ? '选择节目' : '选择投稿')
+                        }}
                       </button>
                     </div>
                   </div>
@@ -298,12 +356,44 @@
 
     </div>
 
-    <!-- 重复歌曲弹窗 -->
-    <DuplicateSongModal
-        :show="showDuplicateModal"
-        :song="duplicateSong"
-        @close="closeDuplicateModal"
-        @like="handleLikeDuplicate"
+    <!-- 网易云音乐登录弹窗 -->
+    <NeteaseLoginModal
+        :show="showLoginModal"
+        @close="showLoginModal = false"
+        @login-success="handleLoginSuccess"
+    />
+
+    <!-- 播客节目列表弹窗 -->
+    <PodcastEpisodesModal
+        ref="podcastModalRef"
+        :cookie="podcastCookie"
+        :radio-id="selectedPodcastId"
+        :radio-name="selectedPodcastName"
+        :show="showPodcastModal"
+        @close="showPodcastModal = false"
+        @play="handlePodcastPlay"
+        @submit="handlePodcastSubmit"
+    />
+
+    <!-- 最近播放歌曲弹窗 -->
+    <RecentSongsModal
+        ref="recentSongsModalRef"
+        :cookie="neteaseCookie"
+        :show="showRecentSongsModal"
+        @close="showRecentSongsModal = false"
+        @play="handleRecentSongPlay"
+        @submit="handleRecentSongSubmit"
+    />
+
+    <!-- 歌单选择弹窗 -->
+    <PlaylistSelectionModal
+        ref="playlistModalRef"
+        :cookie="neteaseCookie"
+        :show="showPlaylistModal"
+        :uid="neteaseUser?.userId || neteaseUser?.id"
+        @close="showPlaylistModal = false"
+        @play="handlePlaylistPlay"
+        @submit="handlePlaylistSubmit"
     />
 
     <!-- 手动输入弹窗 -->
@@ -426,10 +516,13 @@ import {useSiteConfig} from '~/composables/useSiteConfig'
 import {useAuth} from '~/composables/useAuth'
 import {useSemesters} from '~/composables/useSemesters'
 import {useMusicSources} from '~/composables/useMusicSources'
-import {getEnabledSources} from '~/utils/musicSources'
-import DuplicateSongModal from './DuplicateSongModal.vue'
 import Icon from '../UI/Icon.vue'
 import {convertToHttps, validateUrl} from '~/utils/url'
+
+import NeteaseLoginModal from './NeteaseLoginModal.vue'
+import PodcastEpisodesModal from './PodcastEpisodesModal.vue'
+import RecentSongsModal from './RecentSongsModal.vue'
+import PlaylistSelectionModal from './PlaylistSelectionModal.vue'
 
 const props = defineProps({
   loading: {
@@ -453,13 +546,28 @@ const {fetchCurrentSemester, currentSemester} = useSemesters()
 
 const title = ref('')
 const artist = ref('')
-const platform = ref('tencent') // 默认使用QQ音乐
+const platform = ref('netease') // 默认使用网易云音乐
 const preferredPlayTimeId = ref('')
 const error = ref('')
 const success = ref('')
 const submitting = ref(false)
 const voting = ref(false)
 const similarSongs = ref([])
+const showLoginModal = ref(false)
+const isNeteaseLoggedIn = ref(false)
+const neteaseUser = ref(null)
+const neteaseCookie = ref('')
+const searchType = ref(1) // 1: 单曲, 1009: 播客/电台
+
+// 播客弹窗相关
+const showPodcastModal = ref(false)
+const selectedPodcastId = ref('')
+const selectedPodcastName = ref('')
+const podcastCookie = ref('')
+
+const showRecentSongsModal = ref(false)
+const showPlaylistModal = ref(false)
+
 const songService = useSongs()
 const playTimes = ref([])
 const playTimeSelectionEnabled = ref(false)
@@ -468,10 +576,6 @@ const loadingPlayTimes = ref(false)
 // 投稿状态
 const submissionStatus = ref(null)
 const loadingSubmissionStatus = ref(false)
-
-// 重复歌曲弹窗相关
-const showDuplicateModal = ref(false)
-const duplicateSong = ref(null)
 
 // 搜索相关
 const searching = ref(false)
@@ -521,7 +625,66 @@ const fetchPlayTimes = async () => {
   }
 }
 
+const checkNeteaseLoginStatus = () => {
+  if (process.client) {
+    const cookie = localStorage.getItem('netease_cookie')
+    const userStr = localStorage.getItem('netease_user')
+    if (cookie) {
+      neteaseCookie.value = cookie
+      isNeteaseLoggedIn.value = true
+      if (userStr) {
+        try {
+          neteaseUser.value = JSON.parse(userStr)
+        } catch (e) {
+          console.error('Failed to parse netease user info', e)
+        }
+      }
+    }
+  }
+}
+
+const handleLoginSuccess = (data) => {
+  neteaseCookie.value = data.cookie
+  neteaseUser.value = data.user
+  isNeteaseLoggedIn.value = true
+
+  if (process.client) {
+    localStorage.setItem('netease_cookie', data.cookie)
+    localStorage.setItem('netease_user', JSON.stringify(data.user))
+  }
+}
+
+const handleLogoutNetease = () => {
+  neteaseCookie.value = ''
+  neteaseUser.value = null
+  isNeteaseLoggedIn.value = false
+  searchType.value = 1
+
+  if (process.client) {
+    localStorage.removeItem('netease_cookie')
+    localStorage.removeItem('netease_user')
+  }
+}
+
+watch(
+    () => searchType.value,
+    () => {
+      if (platform.value !== 'netease') return
+      if (!isNeteaseLoggedIn.value) return
+      if (!title.value.trim()) return
+
+      if (searchAbortController.value) {
+        searchAbortController.value.abort()
+        searchAbortController.value = null
+        searching.value = false
+      }
+
+      handleSearch()
+    }
+)
+
 onMounted(async () => {
+  checkNeteaseLoginStatus()
   fetchPlayTimes()
   initSiteConfig()
   fetchSubmissionStatus()
@@ -684,7 +847,6 @@ const handleLikeFromSearch = async (song) => {
     return
   }
 
-  // 检查歌曲状态
   if (song.played || song.scheduled) {
     if (window.$showNotification) {
       const message = song.played ? '已播放的歌曲不能点赞' : '已排期的歌曲不能点赞'
@@ -695,31 +857,8 @@ const handleLikeFromSearch = async (song) => {
 
   try {
     await songService.voteSong(song.id)
-    // songService.voteSong 已经包含了成功提示，这里不需要重复显示
   } catch (error) {
-    // 错误提示由 songService.voteSong 处理，这里不需要重复显示
     console.error('点赞失败:', error)
-  }
-}
-
-// 关闭重复歌曲弹窗
-const closeDuplicateModal = () => {
-  showDuplicateModal.value = false
-  duplicateSong.value = null
-}
-
-// 处理重复歌曲弹窗中的点赞
-const handleLikeDuplicate = async (songId) => {
-  try {
-    await songService.voteSong(songId)
-    if (window.$showNotification) {
-      window.$showNotification(`点赞成功！`, 'success')
-    }
-    closeDuplicateModal()
-  } catch (error) {
-    if (window.$showNotification) {
-      window.$showNotification('点赞失败，请稍后重试', 'error')
-    }
   }
 }
 
@@ -776,7 +915,9 @@ const handleSearch = async () => {
       keywords: title.value.trim(),
       platform: platform.value,
       limit: 20,
-      signal: signal // 传递AbortSignal
+      signal: signal, // 传递AbortSignal
+      type: platform.value === 'netease' ? searchType.value : 1,
+      cookie: platform.value === 'netease' ? neteaseCookie.value : undefined
     }
 
     console.log('开始多音源搜索:', searchParams)
@@ -862,7 +1003,7 @@ const getAudioUrl = async (result) => {
         const songId = result.musicId || result.id
         if (!songId) throw new Error('缺少歌曲ID参数')
 
-        const { getQuality } = useAudioQuality()
+        const {getQuality} = useAudioQuality()
         const quality = getQuality(platform.value) || 8
         const urlResult = await musicSources.getSongUrl(songId, quality, 'tencent')
 
@@ -872,10 +1013,10 @@ const getAudioUrl = async (result) => {
 
           // 更新搜索结果中的对应项
           const index = searchResults.value.findIndex(
-            (item) => (item.musicId || item.id) === (result.musicId || result.id)
+              (item) => (item.musicId || item.id) === (result.musicId || result.id)
           )
           if (index !== -1) {
-            searchResults.value[index] = { ...result }
+            searchResults.value[index] = {...result}
           }
           return result
         } else {
@@ -956,11 +1097,22 @@ const getAudioUrl = async (result) => {
 
     // 对于网易云备用源，直接调用getSongUrl获取播放链接
     if (sourceType === 'netease-backup') {
+      const targetPlatform = 'netease'
       const {getQuality} = useAudioQuality()
-      const quality = getQuality(platform.value)
+      const quality = getQuality(targetPlatform)
       const songId = result.musicId || result.id
+
+      // 检查是否为播客内容
+      const isPodcast = result.sourceInfo?.type === 'voice' || searchType.value === 1009
+
       try {
-        const urlResult = await musicSources.getSongUrl(songId, quality, platform.value)
+        const urlResult = await musicSources.getSongUrl(
+            songId,
+            quality,
+            targetPlatform,
+            neteaseCookie.value,
+            {unblock: !isPodcast} // 播客内容 unblock=false，普通歌曲 unblock=true
+        )
 
         if (urlResult && urlResult.success && urlResult.url) {
           // 更新结果中的URL和其他信息
@@ -1015,7 +1167,7 @@ const playSong = async (result) => {
     artist: result.singer || result.artist,
     cover: result.cover || null,
     musicUrl: result.url,
-    musicPlatform: platform.value,
+    musicPlatform: result.musicPlatform || platform.value,
     musicId: result.musicId ? String(result.musicId) : null,
   }
 
@@ -1069,6 +1221,18 @@ const selectResult = async (result) => {
 const submitSong = async (result, options = {}) => {
   // 防止重复点击和重复提交
   if (submitting.value) return
+
+  // 如果是播客/电台模式，且是在网易云平台下，且不是具体的单集提交
+  if (platform.value === 'netease' && searchType.value === 1009 && !options.isPodcastEpisode && !options.isDirectSubmit) {
+    console.log('打开播客节目列表:', result)
+    // 打开播客节目列表弹窗
+    selectedPodcastId.value = result.id || result.musicId
+    selectedPodcastName.value = result.title || result.song || result.name
+    podcastCookie.value = neteaseCookie.value
+    showPodcastModal.value = true
+    return
+  }
+
   console.log('执行submitSong，提交歌曲:', result.title || result.song)
 
   // 检查投稿限额
@@ -1094,8 +1258,9 @@ const submitSong = async (result, options = {}) => {
     if (existingSong) {
       const allowOverride = options.forceResubmit === true || (isSuperAdmin.value && existingSong.played)
       if (!allowOverride) {
-        duplicateSong.value = existingSong
-        showDuplicateModal.value = true
+        if (window.$showNotification) {
+          window.$showNotification('这首歌曲已经在列表中了，不能重复投稿。您可以为它点赞支持！', 'warning')
+        }
         return
       }
     }
@@ -1148,7 +1313,7 @@ const submitSong = async (result, options = {}) => {
           ? parseInt(preferredPlayTimeId.value)
           : null,
       cover: selectedCover.value,
-      musicPlatform: result.actualMusicPlatform || platform.value, // 优先使用搜索结果的实际平台来源
+      musicPlatform: result.actualMusicPlatform || result.musicPlatform || platform.value, // 优先使用搜索结果的实际平台来源
       musicId: result.musicId ? String(result.musicId) : null,
     }
 
@@ -1157,11 +1322,13 @@ const submitSong = async (result, options = {}) => {
 
     // 成功提示由父组件处理，这里只重置表单
     resetForm()
+    return true
   } catch (err) {
     error.value = err.message || '投稿失败，请稍后重试'
     if (window.$showNotification) {
       window.$showNotification(error.value, 'error')
     }
+    return false
   } finally {
     submitting.value = false
   }
@@ -1211,6 +1378,67 @@ const handleSubmit = async () => {
     submitting.value = false
   }
 }
+
+// 引用模态框组件
+const podcastModalRef = ref(null)
+const recentSongsModalRef = ref(null)
+const playlistModalRef = ref(null)
+
+// 处理播客单集提交
+const handlePodcastSubmit = async (song) => {
+  const success = await submitSong(song, {isPodcastEpisode: true})
+  if (success) {
+    showPodcastModal.value = false
+  } else {
+    // 如果失败，重置模态框内的提交状态
+    if (podcastModalRef.value && podcastModalRef.value.resetSubmissionState) {
+      podcastModalRef.value.resetSubmissionState()
+    }
+  }
+}
+
+// 处理播客单集播放
+const handlePodcastPlay = async (song) => {
+  console.log('播放播客单集:', song.title)
+  await playSong(song)
+}
+
+// 处理最近播放歌曲提交
+const handleRecentSongSubmit = async (song) => {
+  const success = await submitSong(song, {isPodcastEpisode: false, isDirectSubmit: true})
+  if (success) {
+    showRecentSongsModal.value = false
+  } else {
+    // 如果失败，重置模态框内的提交状态
+    if (recentSongsModalRef.value && recentSongsModalRef.value.resetSubmissionState) {
+      recentSongsModalRef.value.resetSubmissionState()
+    }
+  }
+}
+
+// 处理最近播放歌曲播放
+const handleRecentSongPlay = async (song) => {
+  await playSong(song)
+}
+
+// 处理歌单歌曲提交
+const handlePlaylistSubmit = async (song) => {
+  const success = await submitSong(song, {isPodcastEpisode: false, isDirectSubmit: true})
+  if (success) {
+    showPlaylistModal.value = false
+  } else {
+    // 如果失败，重置模态框内的提交状态
+    if (playlistModalRef.value && playlistModalRef.value.resetSubmissionState) {
+      playlistModalRef.value.resetSubmissionState()
+    }
+  }
+}
+
+// 处理歌单歌曲播放
+const handlePlaylistPlay = async (song) => {
+  await playSong(song)
+}
+
 
 // 手动输入相关方法
 const handleManualSubmit = async () => {
@@ -1733,12 +1961,229 @@ defineExpose({
 }
 
 /* 平台选择按钮样式 */
+.platform-selection-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
 .platform-selection {
   display: flex;
   gap: 1rem;
-  margin-bottom: 1rem;
   align-items: flex-start;
-  flex-shrink: 0;
+}
+
+/* 网易云音乐登录选项 */
+.netease-options {
+  position: relative;
+  background: linear-gradient(145deg, rgba(30, 30, 35, 0.95), rgba(20, 20, 25, 0.98));
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.netease-options::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #c20c0c, #ff4b4b, #c20c0c);
+  opacity: 0.8;
+}
+
+.netease-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.netease-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.netease-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c20c0c;
+  box-shadow: 0 0 8px rgba(194, 12, 12, 0.6);
+}
+
+.netease-title {
+  font-family: 'MiSans', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.login-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+}
+
+.login-desc {
+  flex: 1;
+}
+
+.login-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 0.25rem 0;
+}
+
+.login-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.login-btn {
+  background: linear-gradient(135deg, #e11d1d 0%, #c20c0c 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'MiSans', sans-serif;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(194, 12, 12, 0.3);
+}
+
+.login-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(194, 12, 12, 0.4);
+}
+
+.user-status {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.user-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-name {
+  font-size: 14px;
+  color: white;
+  font-weight: 600;
+}
+
+.search-type-switch {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.radio-label.active {
+  color: #ffffff;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.radio-label input {
+  display: none;
+}
+
+.user-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 0.6rem;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .platform-btn {
@@ -2338,29 +2783,33 @@ defineExpose({
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  transition: all 0.3s ease;
 }
 
 .modal-content {
-  background: rgba(30, 41, 59, 0.95);
-  border-radius: 0.75rem;
+  background: rgba(20, 20, 25, 0.95);
+  border-radius: 16px;
   width: 90%;
   max-width: 500px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transform-origin: center;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .modal-header h3 {
@@ -2369,17 +2818,18 @@ defineExpose({
   font-family: 'MiSans', sans-serif;
   font-weight: 600;
   font-size: 18px;
+  letter-spacing: 0.02em;
 }
 
 .close-btn {
-  background: none;
+  background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 24px;
   cursor: pointer;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2390,6 +2840,7 @@ defineExpose({
 .close-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #FFFFFF;
+  transform: rotate(90deg);
 }
 
 .modal-body {
@@ -2400,62 +2851,79 @@ defineExpose({
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
-  margin-top: 1.5rem;
+  margin-top: 2rem;
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.2rem;
   border-radius: 8px;
   font-family: 'MiSans', sans-serif;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:active {
+  transform: scale(0.96);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, #0043F8 0%, #0075F8 100%);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, #0043F8 0%, #0075F8 100%);
+  border-color: rgba(255, 255, 255, 0.1);
   color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(0, 67, 248, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 67, 248, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 67, 248, 0.4);
 }
 
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .readonly {
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(255, 255, 255, 0.6) !important;
+  background: rgba(0, 0, 0, 0.2) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
   cursor: not-allowed;
+  border-color: transparent !important;
 }
 
 /* 弹窗动画 */
 .modal-animation-enter-active,
 .modal-animation-leave-active {
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal-animation-enter-from,
 .modal-animation-leave-to {
   opacity: 0;
-  transform: scale(0.9);
+}
+
+.modal-animation-enter-from .modal-content,
+.modal-animation-leave-to .modal-content {
+  transform: scale(0.95) translateY(10px);
+  opacity: 0;
 }
 
 .result-item {
@@ -2741,6 +3209,47 @@ defineExpose({
 
 /* 响应式调整 */
 @media (max-width: 768px) {
+  /* Netease Options Mobile Optimization */
+  .netease-options {
+    padding: 0.75rem;
+  }
+
+  .user-info-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .user-profile {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .search-type-switch {
+    width: 100%;
+    display: flex;
+  }
+
+  .radio-label {
+    flex: 1;
+    text-align: center;
+  }
+
+  .user-actions-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  /* 移动端下让按钮平分宽度 */
+  .user-actions-grid .action-btn {
+    flex: 1;
+    width: auto;
+    justify-content: center;
+    padding: 0.6rem 0.4rem;
+  }
+
   .request-form {
     flex-direction: column;
     height: auto;

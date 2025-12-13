@@ -15,7 +15,7 @@ import {
     type SongDetailResult,
     type SourceStatus
 } from '~/utils/musicSources'
-import { searchBilibili, getBilibiliTrackUrl } from '~/utils/bilibiliSource'
+import {getBilibiliTrackUrl, searchBilibili} from '~/utils/bilibiliSource'
 
 /**
  * 音源管理器 Composable
@@ -43,15 +43,65 @@ export const useMusicSources = () => {
     }> => {
         try {
             const metingUrl = `${source.baseUrl}/?server=netease&type=song&id=${id}`
-            
+
             const response = await $fetch(metingUrl, {
                 timeout: source.timeout || 8000,
                 headers: source.headers
             })
-            
+
             // Meting API 返回歌曲信息数组
             if (Array.isArray(response) && response.length > 0) {
                 const songInfo = response[0]
+                /**
+                 * 获取电台/播客节目列表
+                 */
+                const getDjPrograms = async (radioId: string | number, limit: number = 20, offset: number = 0, cookie?: string): Promise<{
+                    success: boolean;
+                    programs: any[];
+                    count: number;
+                    more: boolean;
+                    error?: string
+                }> => {
+                    const enabledSources = getEnabledSources()
+                    // 优先使用网易云备用源
+                    const neteaseSources = enabledSources.filter(source => source.id.includes('netease-backup'))
+
+                    // 如果没有找到网易云备用源，尝试其他可能支持的源（虽然目前只有备用源支持此接口）
+                    if (neteaseSources.length === 0) {
+                        return {success: false, programs: [], count: 0, more: false, error: '未找到可用的网易云音源'}
+                    }
+
+                    // 尝试所有网易云源
+                    for (const source of neteaseSources) {
+                        try {
+                            let cookieParam = ''
+                            if (cookie) {
+                                cookieParam = `&cookie=${encodeURIComponent(cookie)}`
+                            }
+
+                            const url = `${source.baseUrl}/dj/program?rid=${radioId}&limit=${limit}&offset=${offset}&unblock=false${cookieParam}`
+                            console.log(`[getDjPrograms] Requesting: ${url}`)
+
+                            const response: any = await $fetch(url, {
+                                timeout: source.timeout || 8000
+                            })
+
+                            if (response.code === 200) {
+                                return {
+                                    success: true,
+                                    programs: response.programs || [],
+                                    count: response.count || 0,
+                                    more: response.more || false
+                                }
+                            }
+                        } catch (e: any) {
+                            console.warn(`[getDjPrograms] Source ${source.id} failed:`, e.message)
+                        }
+                    }
+
+                    return {success: false, programs: [], count: 0, more: false, error: '获取节目列表失败'}
+                }
+
                 return {
                     success: true,
                     data: {
@@ -63,10 +113,10 @@ export const useMusicSources = () => {
                     }
                 }
             }
-            
-            return { success: false, error: 'Meting API 未返回有效数据' }
+
+            return {success: false, error: 'Meting API 未返回有效数据'}
         } catch (error: any) {
-            return { success: false, error: error?.message || '未知错误' }
+            return {success: false, error: error?.message || '未知错误'}
         }
     }
 
@@ -112,12 +162,12 @@ export const useMusicSources = () => {
             // 尝试获取文件大小来估算时长
             const contentLength = response.headers.get('content-length')
             let estimatedDuration = 0
-            
+
             if (contentLength) {
                 const fileSizeBytes = parseInt(contentLength)
                 // 粗略估算：假设128kbps的音质，1MB约为64秒
                 estimatedDuration = (fileSizeBytes / 1024 / 1024) * 64
-                
+
                 if (estimatedDuration < 5) {
                     return {
                         valid: false,
@@ -166,8 +216,14 @@ export const useMusicSources = () => {
 
             // 根据平台选择合适的音源顺序
             let sourcesToTry: MusicSource[]
-            
-            if (params.platform === 'bilibili') {
+
+            if (params.type === 1009) {
+                // 播客/电台搜索：只允许使用 netease-backup 源
+                sourcesToTry = enabledSources.filter(s => s.id.includes('netease-backup'))
+                if (sourcesToTry.length === 0) {
+                    throw new Error('未找到支持播客搜索的音源(需网易云备用源)')
+                }
+            } else if (params.platform === 'bilibili') {
                 const bilibiliSource = enabledSources.find(s => s.id === 'bilibili')
                 if (bilibiliSource) {
                     sourcesToTry = [bilibiliSource]
@@ -190,7 +246,7 @@ export const useMusicSources = () => {
                 const neteaseSources = enabledSources.filter(s => s.id.includes('netease-backup'))
                 const vkeysSource = enabledSources.find(s => s.id === 'vkeys')
                 const otherSources = enabledSources.filter(s => !s.id.includes('netease-backup') && s.id !== 'vkeys')
-                
+
                 sourcesToTry = [
                     ...neteaseSources,
                     ...(vkeysSource ? [vkeysSource] : []),
@@ -247,7 +303,7 @@ export const useMusicSources = () => {
                             currentSource.value = source.id
                             lastUsedSource.value = source.id
                             updateSourceStatus(source.id, 'online')
-                            return { success: true, source: source.id, data: result, error: undefined }
+                            return {success: true, source: source.id, data: result, error: undefined}
                         } catch (error: any) {
                             console.warn(`音源 ${source.name} 搜索失败:`, error.message)
                             updateSourceStatus(source.id, 'error', error.message)
@@ -308,9 +364,24 @@ export const useMusicSources = () => {
 
             transformResponse = (data: any) => transformVkeysResponse(data, platform)
         } else {
-            // 网易云备用API - 优先使用cloudsearch接口
-            url = `${source.baseUrl}/cloudsearch?keywords=${encodeURIComponent(params.keywords)}&limit=${params.limit || 30}&offset=${params.offset || 0}&type=${params.type || 1}`
-            transformResponse = async (data: any) => await transformNeteaseResponse(data)
+            // 网易云备用API
+            // 如果提供了cookie，添加到查询参数中
+            let cookieParam = ''
+            if (params.cookie) {
+                // 将cookie编码后作为参数传递
+                cookieParam = `&cookie=${encodeURIComponent(params.cookie)}`
+            }
+
+            // 如果是播客/电台搜索 (type === 1009)，使用 /cloudsearch 接口
+            if (params.type === 1009) {
+                // 播客/电台搜索接口参数：keywords=关键词, limit=数量, offset=偏移量, type=1009
+                url = `${source.baseUrl}/cloudsearch?keywords=${encodeURIComponent(params.keywords)}&limit=${params.limit || 20}&offset=${params.offset || 0}&type=1009${cookieParam}`
+                transformResponse = async (data: any) => await transformNeteaseResponse(data)
+            } else {
+                // 默认使用 cloudsearch 接口
+                url = `${source.baseUrl}/cloudsearch?keywords=${encodeURIComponent(params.keywords)}&limit=${params.limit || 30}&offset=${params.offset || 0}&type=${params.type || 1}${cookieParam}`
+                transformResponse = async (data: any) => await transformNeteaseResponse(data)
+            }
         }
 
         let response: any
@@ -341,7 +412,13 @@ export const useMusicSources = () => {
             if (source.id !== 'vkeys' && finalUrl.includes('/cloudsearch')) {
                 console.warn(`[${source.name}] cloudsearch接口失败，尝试使用search接口:`, error.message)
 
-                const fallbackUrl = `${source.baseUrl}/search?keywords=${encodeURIComponent(params.keywords)}&limit=${params.limit || 30}&offset=${params.offset || 0}&type=${params.type || 1}`
+                // 如果提供了cookie，添加到查询参数中
+                let cookieParam = ''
+                if (params.cookie) {
+                    cookieParam = `&cookie=${encodeURIComponent(params.cookie)}`
+                }
+
+                const fallbackUrl = `${source.baseUrl}/search?keywords=${encodeURIComponent(params.keywords)}&limit=${params.limit || 30}&offset=${params.offset || 0}&type=${params.type || 1}${cookieParam}`
 
                 try {
                     console.log(`[${source.name}] 备用请求URL:`, fallbackUrl)
@@ -542,20 +619,46 @@ export const useMusicSources = () => {
      * 获取歌曲播放URL
      * 根据平台选择合适的音源：网易云优先使用netease-backup；QQ音乐仅使用vkeys系（不跨平台）
      */
-    const getSongUrl = async (id: number | string, quality?: number, platform?: string): Promise<{
+    const getSongUrl = async (id: number | string, quality?: number, platform?: string, cookie?: string, options?: {
+        unblock?: boolean
+    }): Promise<{
         success: boolean;
         url?: string;
         error?: string
     }> => {
+        // 特殊处理 netease-podcast 平台：使用网易云逻辑但禁用 unblock
+        if (platform === 'netease-podcast') {
+            platform = 'netease'
+            if (!options) {
+                options = {}
+            }
+            // 只有在未明确指定 unblock 时才强制设为 false
+            if (options.unblock === undefined) {
+                options.unblock = false
+            }
+        }
+
+        // 如果没有提供cookie且在客户端环境，尝试从localStorage获取
+        if (!cookie && import.meta.client) {
+            try {
+                const storedCookie = localStorage.getItem('netease_cookie')
+                if (storedCookie) {
+                    cookie = storedCookie
+                }
+            } catch (e) {
+                // Ignore localStorage errors
+            }
+        }
+
         try {
             // 获取所有启用的音源
             const enabledSources = getEnabledSources()
-            
+
             // 支持多个ID的批量查询（用逗号分隔）
             const idParam = Array.isArray(id) ? id.join(',') : id.toString()
 
             // 定义音源尝试顺序
-            let sourcesToTry: Array<{source: MusicSource, type: 'netease' | 'tencent' | 'bilibili'}> = []
+            let sourcesToTry: Array<{ source: MusicSource, type: 'netease' | 'tencent' | 'bilibili' }> = []
 
             if (platform === 'bilibili') {
                 const bilibiliSource = enabledSources.find(source => source.id === 'bilibili')
@@ -575,27 +678,27 @@ export const useMusicSources = () => {
                 }
             } else {
                 // 网易云音乐平台（默认）：优先使用netease-backup系列，然后vkeys，最后其他
-                
+
                 const neteaseSource = enabledSources.find(source => source.id.includes('netease-backup'))
                 if (neteaseSource) {
                     sourcesToTry.push({source: neteaseSource, type: 'netease'})
                 }
-                
+
                 const vkeysSource = enabledSources.find(source => source.id === 'vkeys')
                 if (vkeysSource) {
                     sourcesToTry.push({source: vkeysSource, type: 'netease'})
                 }
-                
+
                 // 添加 Meting API 备用源
                 const metingSources = enabledSources.filter(source => source.id.startsWith('meting-'))
                 metingSources.forEach(source => {
                     sourcesToTry.push({source, type: 'netease'})
                 })
-                
+
                 // 添加其他备用音源
-                const otherSources = enabledSources.filter(source => 
-                    source.id !== 'vkeys' && 
-                    !source.id.includes('netease-backup') && 
+                const otherSources = enabledSources.filter(source =>
+                    source.id !== 'vkeys' &&
+                    !source.id.includes('netease-backup') &&
                     !source.id.startsWith('meting-')
                 )
                 otherSources.forEach(source => {
@@ -605,10 +708,10 @@ export const useMusicSources = () => {
 
             // 逐个尝试音源
             for (const {source, type} of sourcesToTry) {
-                
+
                 try {
                     let url: string | null = null
-                    
+
                     if (source.id === 'bilibili') {
                         const result = await getBilibiliTrackUrl(idParam)
                         url = result.url
@@ -617,9 +720,9 @@ export const useMusicSources = () => {
                         const vkeysQuality = type === 'tencent' ? (typeof quality === 'number' ? quality : 8) : (typeof quality === 'number' ? quality : 0)
                         const endpoint = type === 'tencent' ? 'tencent' : 'netease'
                         const vkeysUrl = `${source.baseUrl}/${endpoint}?id=${idParam}&quality=${vkeysQuality}`
-                        
+
                         const vkeysResp = await $fetch(vkeysUrl, {timeout: source.timeout || 8000})
-                        
+
                         if (vkeysResp?.code === 200 && vkeysResp?.data?.url) {
                             url = String(vkeysResp.data.url)
                         }
@@ -627,14 +730,19 @@ export const useMusicSources = () => {
                         // Vkeys v3：先获取歌曲信息与音质列表，再按可用音质选择并调用 v2 获取可播放URL
                         try {
                             const infoUrl = `${source.baseUrl}/tencent/song/info?id=${encodeURIComponent(idParam)}`
-                            const infoResp = await $fetch(infoUrl, { timeout: source.timeout || 8000 })
+                            const infoResp = await $fetch(infoUrl, {timeout: source.timeout || 8000})
 
                             // v3 成功码为 0
                             if (typeof infoResp?.code !== 'number' || infoResp.code !== 0 || !infoResp?.data) {
                                 throw new Error(`v3 歌曲信息接口错误: ${infoResp?.message || '未知错误'} (code: ${infoResp?.code})`)
                             }
 
-                            const qualityInfo: Array<{ type: number; size: number; file: string; quality: string }> = infoResp.data.qualityInfo || []
+                            const qualityInfo: Array<{
+                                type: number;
+                                size: number;
+                                file: string;
+                                quality: string
+                            }> = infoResp.data.qualityInfo || []
                             if (!Array.isArray(qualityInfo) || qualityInfo.length === 0) {
                                 throw new Error('v3 歌曲信息缺少音质列表')
                             }
@@ -645,7 +753,7 @@ export const useMusicSources = () => {
                                 targetQuality = quality
                             } else {
                                 try {
-                                    const { getQuality } = await import('./useAudioQuality')
+                                    const {getQuality} = await import('./useAudioQuality')
                                     targetQuality = getQuality('tencent')
                                 } catch {
                                     targetQuality = 8 // 默认 HQ 高音质
@@ -655,7 +763,7 @@ export const useMusicSources = () => {
                             // 构造腾讯音质优先序列：以目标为首，其次按 QUALITY_OPTIONS.tencent 顺序降级，最后兜底常见音质
                             let fallbackList: number[] = []
                             try {
-                                const { QUALITY_OPTIONS } = await import('./useAudioQuality')
+                                const {QUALITY_OPTIONS} = await import('./useAudioQuality')
                                 const optionValues = (QUALITY_OPTIONS as any)?.tencent?.map((o: any) => o.value) || []
                                 fallbackList = optionValues.filter((v: number) => v !== targetQuality)
                             } catch {
@@ -675,7 +783,7 @@ export const useMusicSources = () => {
                             }
 
                             const v2Url = `${v2Source.baseUrl}/tencent?id=${idParam}&quality=${selectedQuality}`
-                            const v2Resp = await $fetch(v2Url, { timeout: v2Source.timeout || 8000 })
+                            const v2Resp = await $fetch(v2Url, {timeout: v2Source.timeout || 8000})
                             if (v2Resp?.code === 200 && v2Resp?.data?.url) {
                                 url = String(v2Resp.data.url)
                             } else {
@@ -685,7 +793,7 @@ export const useMusicSources = () => {
                                     if (!hasQuality) continue
 
                                     const altUrl = `${v2Source.baseUrl}/tencent?id=${idParam}&quality=${q}`
-                                    const altResp = await $fetch(altUrl, { timeout: v2Source.timeout || 8000 })
+                                    const altResp = await $fetch(altUrl, {timeout: v2Source.timeout || 8000})
                                     if (altResp?.code === 200 && altResp?.data?.url) {
                                         url = String(altResp.data.url)
                                         break
@@ -705,21 +813,21 @@ export const useMusicSources = () => {
                         try {
                             // 首先尝试获取歌曲信息，包含播放链接
                             const songInfo = await getMetingSongInfo(idParam, source)
-                            
+
                             if (songInfo.success && songInfo.data?.url) {
                                 // 从歌曲信息中提取播放链接
                                 url = songInfo.data.url
                             } else {
                                 // 如果获取歌曲信息失败，直接使用 URL 类型的 API
                                 const metingUrl = `${source.baseUrl}/?server=netease&type=url&id=${idParam}`
-                                
+
                                 // 对于 Meting API，我们需要处理重定向
                                 const response = await fetch(metingUrl, {
                                     method: 'GET',
                                     headers: source.headers || {},
                                     redirect: 'follow'
                                 })
-                                
+
                                 if (response.ok && response.url) {
                                     url = response.url
                                 }
@@ -738,12 +846,18 @@ export const useMusicSources = () => {
                             // 无法获取音质设置，使用默认音质
                         }
 
+                        // 如果提供了cookie，添加到请求参数中
+                        const params: any = {
+                            id: idParam,
+                            level: level,
+                            unblock: options?.unblock ?? true
+                        }
+                        if (cookie) {
+                            params.cookie = cookie
+                        }
+
                         const response = await $fetch(`${source.baseUrl}/song/url/v1`, {
-                            params: {
-                                id: idParam,
-                                level: level,
-                                unblock: true
-                            },
+                            params,
                             timeout: source.timeout || 8000
                         })
 
@@ -757,10 +871,10 @@ export const useMusicSources = () => {
                         if (url.startsWith('http://')) {
                             url = url.replace('http://', 'https://')
                         }
-                        
+
                         // 验证播放链接
                         const validation = await validatePlayUrl(url)
-                        
+
                         if (validation.valid) {
                             return {success: true, url}
                         } else {
@@ -798,11 +912,17 @@ export const useMusicSources = () => {
             if (platform === 'netease' && neteaseSource) {
                 try {
                     const [lrcResp, yrcResp] = await Promise.allSettled([
-                        $fetch(`${neteaseSource.baseUrl}/lyric`, { params: { id: id.toString() }, timeout: neteaseSource.timeout || 8000 }),
-                        $fetch(`${neteaseSource.baseUrl}/lyric/new`, { params: { id: id.toString() }, timeout: neteaseSource.timeout || 8000 })
+                        $fetch(`${neteaseSource.baseUrl}/lyric`, {
+                            params: {id: id.toString()},
+                            timeout: neteaseSource.timeout || 8000
+                        }),
+                        $fetch(`${neteaseSource.baseUrl}/lyric/new`, {
+                            params: {id: id.toString()},
+                            timeout: neteaseSource.timeout || 8000
+                        })
                     ])
 
-                    const data: { lrc: string; trans?: string; yrc?: string } = { lrc: '', trans: '', yrc: '' }
+                    const data: { lrc: string; trans?: string; yrc?: string } = {lrc: '', trans: '', yrc: ''}
 
                     if (lrcResp.status === 'fulfilled' && lrcResp.value?.code === 200) {
                         const lr = lrcResp.value
@@ -815,7 +935,7 @@ export const useMusicSources = () => {
                     }
 
                     if (data.lrc || data.yrc) {
-                        return { success: true, data }
+                        return {success: true, data}
                     }
                 } catch (e: any) {
                     console.warn('[getLyrics] NeteaseCloudMusicApi 获取失败:', e?.message || e)
@@ -833,7 +953,10 @@ export const useMusicSources = () => {
                     throw new Error('不支持的音乐平台')
                 }
 
-                const resp = await $fetch(url, { timeout: vkeysSource.timeout || 8000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } })
+                const resp = await $fetch(url, {
+                    timeout: vkeysSource.timeout || 8000,
+                    headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                })
                 if (resp?.code === 200 && resp?.data) {
                     const d = resp.data
                     const data: { lrc: string; trans?: string; yrc?: string } = {
@@ -842,7 +965,7 @@ export const useMusicSources = () => {
                         yrc: d.yrc || ''
                     }
                     if (data.lrc || data.yrc) {
-                        return { success: true, data }
+                        return {success: true, data}
                     }
                 }
             }
@@ -850,15 +973,15 @@ export const useMusicSources = () => {
             // 最后尝试 Meting API（仅支持网易云）
             if (platform === 'netease') {
                 const metingSources = enabledSources.filter(source => source.id.startsWith('meting-'))
-                
+
                 for (const metingSource of metingSources) {
                     try {
                         const metingUrl = `${metingSource.baseUrl}/?server=netease&type=lrc&id=${id}`
-                        const resp = await $fetch(metingUrl, { 
-                            timeout: metingSource.timeout || 8000, 
-                            headers: metingSource.headers 
+                        const resp = await $fetch(metingUrl, {
+                            timeout: metingSource.timeout || 8000,
+                            headers: metingSource.headers
                         })
-                        
+
                         // Meting API 直接返回歌词文本
                         if (resp && typeof resp === 'string' && resp.trim()) {
                             const data: { lrc: string; trans?: string; yrc?: string } = {
@@ -866,7 +989,7 @@ export const useMusicSources = () => {
                                 trans: '',
                                 yrc: ''
                             }
-                            return { success: true, data }
+                            return {success: true, data}
                         }
                     } catch (error: any) {
                         console.warn(`[getLyrics] Meting API ${metingSource.name} 获取失败:`, error?.message || error)
@@ -875,10 +998,10 @@ export const useMusicSources = () => {
                 }
             }
 
-            return { success: false, error: '未获取到歌词' }
+            return {success: false, error: '未获取到歌词'}
         } catch (error: any) {
             console.error('[getLyrics] 获取歌词失败:', error)
-            return { success: false, error: error?.message || '未知错误' }
+            return {success: false, error: error?.message || '未知错误'}
         }
     }
 
@@ -1045,115 +1168,175 @@ export const useMusicSources = () => {
             throw new Error(`API响应错误: ${response.message || '未知错误'} (code: ${response.code})`)
         }
 
-        // 检查是否有result.songs数据
-        if (!response.result?.songs || !Array.isArray(response.result.songs)) {
-            console.error('[transformNeteaseResponse] 无效的响应结构:', {
-                hasResult: !!response.result,
-                hasSongs: !!response.result?.songs,
-                songsType: typeof response.result?.songs,
-                songsLength: response.result?.songs?.length
-            })
-            throw new Error(`API响应数据格式错误: 缺少songs数组`)
+        // 尝试获取结果列表，支持多种类型（单曲、电台、声音等）
+        const result = response.result || response.data
+        if (!result) {
+            throw new Error('API响应格式错误: 缺少result/data字段')
         }
 
-        const songs = response.result.songs
-        console.log(`[transformNeteaseResponse] 找到 ${songs.length} 首歌曲`)
+        let items = result.songs || result.djRadios || result.resources || result.voices || result.list || []
 
-        if (songs.length === 0) {
+        // 如果是声音搜索(type=2000)，结果可能在 data.resources 或 data.list 中
+        if (!items || items.length === 0) {
+            if (result.data?.resources) {
+                items = result.data.resources
+            } else if (result.list) {
+                items = result.list
+            } else if (Array.isArray(result)) {
+                items = result
+            }
+        }
+
+        if (!Array.isArray(items)) {
+            console.error('[transformNeteaseResponse] 无效的响应结构:', {
+                keys: Object.keys(result),
+                itemsType: typeof items
+            })
+            // 如果找不到列表但也不是错误，可能就是没结果
             return []
         }
 
-        // 检查是否是cloudsearch接口的响应（包含完整信息）
-        const hasCompleteInfo = songs.some(song => song.al?.picUrl)
-        console.log(`[transformNeteaseResponse] 检测到${hasCompleteInfo ? 'cloudsearch' : 'search'}接口响应`)
+        console.log(`[transformNeteaseResponse] 找到 ${items.length} 个结果`)
+
+        if (items.length === 0) {
+            return []
+        }
+
+        // 检查是否是歌曲类型的完整信息
+        // 只有当 items 是 songs 且包含 al.picUrl 时才认为是完整信息的歌曲
+        const isSongType = !!result.songs
+        const hasCompleteInfo = isSongType && items.some((item: any) => item.al?.picUrl)
+        console.log(`[transformNeteaseResponse] 结果类型: ${isSongType ? '歌曲' : '其他'}, 完整信息: ${hasCompleteInfo}`)
 
         let detailResponse: any = null
         let detailMap = new Map()
 
-        // 如果是search接口响应（缺少完整信息），则需要获取详情
-        if (!hasCompleteInfo) {
+        // 如果是search接口响应的歌曲（缺少完整信息），则需要获取详情
+        if (isSongType && !hasCompleteInfo) {
             // 获取网易云备用源
             const enabledSources = getEnabledSources()
             const neteaseSource = enabledSources.find(source => source.id.includes('netease-backup'))
 
-            if (!neteaseSource) {
-                console.error('[transformNeteaseResponse] 未找到网易云备用源')
-                throw new Error('未找到网易云备用源')
-            }
+            if (neteaseSource) {
+                // 提取所有歌曲ID，准备批量获取详情
+                const songIds = items.map((song: any) => song.id).filter((id: any) => id)
+                console.log(`[transformNeteaseResponse] 准备批量获取 ${songIds.length} 首歌曲的详情`)
 
-            // 提取所有歌曲ID，准备批量获取详情
-            const songIds = songs.map(song => song.id).filter(id => id)
-            console.log(`[transformNeteaseResponse] 准备批量获取 ${songIds.length} 首歌曲的详情`)
-
-            if (songIds.length > 0) {
-                try {
-                    // 批量获取歌曲详情，包含封面信息
-                    detailResponse = await $fetch(`${neteaseSource.baseUrl}/song/detail`, {
-                        params: {ids: songIds.join(',')},
-                        timeout: neteaseSource.timeout || 8000
-                    })
-                    console.log(`[transformNeteaseResponse] 批量获取详情成功:`, detailResponse)
-                } catch (error) {
-                    console.warn('[transformNeteaseResponse] 批量获取详情失败，将使用搜索结果的基本信息:', error)
+                if (songIds.length > 0) {
+                    try {
+                        // 批量获取歌曲详情，包含封面信息
+                        detailResponse = await $fetch(`${neteaseSource.baseUrl}/song/detail`, {
+                            params: {ids: songIds.join(',')},
+                            timeout: neteaseSource.timeout || 8000
+                        })
+                        console.log(`[transformNeteaseResponse] 批量获取详情成功`)
+                    } catch (error) {
+                        console.warn('[transformNeteaseResponse] 批量获取详情失败，将使用搜索结果的基本信息:', error)
+                    }
                 }
-            }
 
-            // 创建详情映射，方便查找
-            if (detailResponse?.songs) {
-                detailResponse.songs.forEach((song: any) => {
-                    detailMap.set(song.id, song)
-                })
+                // 创建详情映射，方便查找
+                if (detailResponse?.songs) {
+                    detailResponse.songs.forEach((song: any) => {
+                        detailMap.set(song.id, song)
+                    })
+                }
             }
         }
 
         // 转换搜索结果，根据接口类型使用不同的数据提取策略
-        return songs.map((song: any, index: number) => {
+        return items.map((item: any, index: number) => {
             try {
+                let id = item.id
+                let title = item.name
                 let cover: string | null = null
-                let artist: string
+                let artist: string = '未知艺术家'
                 let album: string | undefined
-                let duration: number
+                let duration: number = 0
+                let musicId = item.id?.toString()
 
-                if (hasCompleteInfo) {
-                    // cloudsearch接口响应，包含完整信息
-                    cover = song.al?.picUrl || null
-                    artist = song.ar?.map((artist: any) => artist.name).join('/') || '未知艺术家'
-                    album = song.al?.name
-                    duration = song.dt
+                // 处理不同类型的数据结构
+                if (isSongType) {
+                    // 歌曲类型处理
+                    if (hasCompleteInfo) {
+                        // cloudsearch接口响应，包含完整信息
+                        cover = item.al?.picUrl || null
+                        artist = item.ar?.map((a: any) => a.name).join('/') || '未知艺术家'
+                        album = item.al?.name
+                        duration = item.dt || 0
+                    } else {
+                        // search接口响应，需要从详情中获取信息
+                        const detail = detailMap.get(item.id)
+                        cover = detail?.al?.picUrl ||
+                            (item.album?.picId ? `https://p1.music.126.net/${item.album.picId}/${item.album.picId}.jpg` : null)
+                        artist = item.artists?.map((a: any) => a.name).join('/') || '未知艺术家'
+                        album = item.album?.name
+                        duration = item.duration || 0
+                    }
                 } else {
-                    // search接口响应，需要从详情中获取信息
-                    const detail = detailMap.get(song.id)
-                    cover = detail?.al?.picUrl ||
-                        (song.album?.picId ? `https://p1.music.126.net/${song.album.picId}/${song.album.picId}.jpg` : null)
-                    artist = song.artists?.map((artist: any) => artist.name).join('/') || '未知艺术家'
-                    album = song.album?.name
-                    duration = song.duration
+                    // 其他类型（如声音、电台等）
+                    // 尝试适配声音/播客结构
+                    const baseInfo = item.baseInfo || item
+
+                    // 优先使用 mainSong.id (声音) 或 mainTrackId (电台节目) 作为歌曲ID，以便能通过 song/url 接口播放
+                    // 如果都没有，才使用 baseInfo.id (节目ID)
+                    const songId = baseInfo.mainSong?.id || baseInfo.mainTrackId || baseInfo.id
+                    id = songId || id
+
+                    title = baseInfo.name || title
+                    cover = baseInfo.coverUrl || baseInfo.picUrl || item.picUrl || null
+
+                    // 尝试获取艺术家/主播信息
+                    if (baseInfo.dj) {
+                        artist = baseInfo.dj.nickname
+                    } else if (item.dj) {
+                        artist = item.dj.nickname
+                    } else if (baseInfo.artist) {
+                        artist = baseInfo.artist.name
+                    }
+
+                    // 尝试获取专辑/电台信息
+                    if (baseInfo.radio) {
+                        album = baseInfo.radio.name
+                    } else if (item.radio) {
+                        album = item.radio.name
+                    }
+
+                    duration = baseInfo.duration || item.duration || 0
+
+                    // 声音ID
+                    musicId = id?.toString()
                 }
 
                 const transformedSong = {
-                    id: song.id,
-                    title: song.name,
+                    id: id,
+                    title: title,
                     artist,
                     cover,
                     album,
                     duration,
-                    musicPlatform: 'netease',
-                    musicId: song.id.toString(),
+                    musicPlatform: isSongType ? 'netease' : 'netease-podcast',
+                    musicId: musicId,
                     sourceInfo: {
                         source: 'netease-backup',
-                        originalId: song.id.toString(),
+                        originalId: musicId,
                         fetchedAt: new Date(),
-                        hasDetail: hasCompleteInfo || !!detailMap.get(song.id), // 标记是否有完整信息
-                        interface: hasCompleteInfo ? 'cloudsearch' : 'search' // 标记使用的接口类型
+                        hasDetail: hasCompleteInfo || !!detailMap.get(item.id),
+                        interface: hasCompleteInfo ? 'cloudsearch' : 'search',
+                        type: isSongType ? 'song' : 'voice'
                     }
                 }
-                console.log(`[transformNeteaseResponse] 转换歌曲 ${index + 1}:`, transformedSong)
+                // 只打印前几个结果，避免日志过多
+                if (index < 3) {
+                    console.log(`[transformNeteaseResponse] 转换结果 ${index + 1}:`, transformedSong)
+                }
                 return transformedSong
             } catch (error: any) {
-                console.error(`[transformNeteaseResponse] 转换第 ${index + 1} 首歌曲失败:`, error.message, song)
-                throw new Error(`转换第 ${index + 1} 首歌曲失败: ${error.message}`)
+                console.error(`[transformNeteaseResponse] 转换第 ${index + 1} 个结果失败:`, error.message, item)
+                // 不抛出错误，而是跳过该项
+                return null
             }
-        })
+        }).filter((item: any) => item !== null)
     }
 
     /**
@@ -1217,6 +1400,56 @@ export const useMusicSources = () => {
         }
     })
 
+    /**
+     * 获取电台/播客节目列表
+     */
+    const getDjPrograms = async (radioId: string | number, limit: number = 20, offset: number = 0, cookie?: string): Promise<{
+        success: boolean;
+        programs: any[];
+        count: number;
+        more: boolean;
+        error?: string
+    }> => {
+        const enabledSources = getEnabledSources()
+        // 优先使用网易云备用源
+        const neteaseSources = enabledSources.filter(source => source.id.includes('netease-backup'))
+
+        // 如果没有找到网易云备用源，尝试其他可能支持的源（虽然目前只有备用源支持此接口）
+        if (neteaseSources.length === 0) {
+            return {success: false, programs: [], count: 0, more: false, error: '未找到可用的网易云音源'}
+        }
+
+        // 尝试所有网易云源
+        for (const source of neteaseSources) {
+            try {
+                let cookieParam = ''
+                if (cookie) {
+                    cookieParam = `&cookie=${encodeURIComponent(cookie)}`
+                }
+
+                const url = `${source.baseUrl}/dj/program?rid=${radioId}&limit=${limit}&offset=${offset}${cookieParam}`
+                console.log(`[getDjPrograms] Requesting: ${url}`)
+
+                const response: any = await $fetch(url, {
+                    timeout: source.timeout || 8000
+                })
+
+                if (response.code === 200) {
+                    return {
+                        success: true,
+                        programs: response.programs || [],
+                        count: response.count || 0,
+                        more: response.more || false
+                    }
+                }
+            } catch (e: any) {
+                console.warn(`[getDjPrograms] Source ${source.id} failed:`, e.message)
+            }
+        }
+
+        return {success: false, programs: [], count: 0, more: false, error: '获取节目列表失败'}
+    }
+
     return {
         // 状态
         config: readonly(config),
@@ -1236,6 +1469,7 @@ export const useMusicSources = () => {
         getLyrics,
         getMetingSongInfo,
         updateSourceStatus,
-        validatePlayUrl
+        validatePlayUrl,
+        getDjPrograms
     }
 }

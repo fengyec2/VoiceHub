@@ -45,7 +45,7 @@ export function useAudioQuality() {
     // 使用全局状态，确保所有组件共享
     if (!globalAudioQuality) {
         globalAudioQuality = ref(getStoredQuality())
-        
+
         // 监听状态变化，自动保存到localStorage
         watch(globalAudioQuality, (newValue) => {
             try {
@@ -53,7 +53,7 @@ export function useAudioQuality() {
             } catch (error) {
                 console.error('保存音质设置失败:', error)
             }
-        }, { deep: true })
+        }, {deep: true})
     }
 
     const audioQuality = globalAudioQuality
@@ -66,16 +66,28 @@ export function useAudioQuality() {
 
     // 获取指定平台的音质设置
     const getQuality = (platform: string) => {
+        // 处理 netease-podcast 别名
+        if (platform === 'netease-podcast') {
+            platform = 'netease'
+        }
         return audioQuality.value[platform] || DEFAULT_QUALITY[platform]
     }
 
     // 获取指定平台的音质选项
     const getQualityOptions = (platform: string) => {
+        // 处理 netease-podcast 别名
+        if (platform === 'netease-podcast') {
+            platform = 'netease'
+        }
         return QUALITY_OPTIONS[platform] || []
     }
 
     // 获取音质标签
     const getQualityLabel = (platform: string, quality: number) => {
+        // 处理 netease-podcast 别名
+        if (platform === 'netease-podcast') {
+            platform = 'netease'
+        }
         const options = getQualityOptions(platform)
         const option = options.find(opt => opt.value === quality)
         return option ? option.label : '未知音质'
@@ -83,6 +95,10 @@ export function useAudioQuality() {
 
     // 获取音质描述
     const getQualityDescription = (platform: string, quality: number) => {
+        // 处理 netease-podcast 别名
+        if (platform === 'netease-podcast') {
+            platform = 'netease'
+        }
         const options = getQualityOptions(platform)
         const option = options.find(opt => opt.value === quality)
         return option ? option.description : ''
