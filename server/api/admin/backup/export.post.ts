@@ -314,6 +314,10 @@ export default defineEventHandler(async (event) => {
         } else if (tables === 'users') {
             // 仅备份用户相关数据
             tablesToProcess = ['users', 'notificationSettings', 'userStatusLogs']
+            // 如果包含系统数据，也添加到处理列表中
+            if (includeSystemData) {
+                tablesToProcess.push('systemSettings')
+            }
         } else if (Array.isArray(tables)) {
             tablesToProcess = tables
         } else {
@@ -343,7 +347,7 @@ export default defineEventHandler(async (event) => {
                 console.log(`✅ ${tableName}: ${tableData.length} 条记录`)
             } catch (error) {
                 // 检查是否为表不存在错误
-                // Postgres error 42P01: undefined_table
+                // Postgres 错误代码 42P01: undefined_table (表不存在)
                 const isTableMissing = error.code === '42P01' || 
                                       (error.message && error.message.includes('does not exist')) ||
                                       (error.statusMessage && error.statusMessage.includes('does not exist'));
@@ -372,7 +376,12 @@ export default defineEventHandler(async (event) => {
 
         // 生成备份文件名（用于下载）
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const filePrefix = tables === 'users' ? 'users-backup' : 'database-backup'
+        let filePrefix = 'database-backup'
+        
+        if (tables === 'users') {
+            filePrefix = includeSystemData ? 'users-system-backup' : 'users-backup'
+        }
+        
         const filename = `${filePrefix}-${timestamp}.json`
 
         console.log(`✅ 备份完成: ${filename}`)

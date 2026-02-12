@@ -3,10 +3,10 @@
 这是一个使用Nuxt 4全栈框架开发的现代化校园广播站点歌管理系统。系统提供完整的点歌、投票、排期管理、通知推送、数据分析、权限控制和数据库管理功能，支持多角色权限管理和灵活的系统配置。
 
 ## 项目截图
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7cb0257f-523b-466f-ae39-e63a1bac17a2" />
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3241ac39-3fa4-4220-b27f-df044b463319" />
-<img width="3200" height="1998" alt="image" src="https://github.com/user-attachments/assets/f721792e-e251-4914-8e15-e929fd424d07" />
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/804c12ba-2f40-4daa-b7ba-3a1882b67b3f" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/fef6970e-95eb-4cab-a11f-db4e71fc87b5" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f76e912c-1263-424b-b379-72321de205f7" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b5de5880-6635-4698-9fd9-dbea9642f06a" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/05472008-57d5-4586-b7ca-572bff8a30ae" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/c30f2e5a-4cc8-48cb-aca2-4d41daeaaaf8" />
 
 ## 主要功能
@@ -343,12 +343,6 @@ VoiceHub/
 │   │       └── year-review.css    # 年度回顾样式
 │   ├── components/            # Vue组件目录
 │   │   ├── Admin/             # 管理员功能组件
-│   │   │   ├── Common/        # 通用管理组件
-│   │   │   │   ├── DataTable.vue      # 通用数据表格组件
-│   │   │   │   ├── ErrorBoundary.vue  # 错误边界组件
-│   │   │   │   ├── LoadingState.vue   # 加载状态组件
-│   │   │   │   ├── SearchFilter.vue   # 搜索过滤组件
-│   │   │   │   └── StatCard.vue       # 统计卡片组件
 │   │   │   ├── ApiKeyManager.vue      # API密钥管理
 │   │   │   ├── BackupManager.vue      # 数据库备份管理
 │   │   │   ├── BatchUpdateModal.vue   # 批量更新模态框
@@ -365,6 +359,7 @@ VoiceHub/
 │   │   │   ├── ScheduleManager.vue    # 排期管理
 │   │   │   ├── SchedulePrinter.vue    # 排期打印功能
 │   │   │   ├── SemesterManager.vue    # 学期管理
+│   │   │   ├── Sidebar.vue            # 管理后台侧边栏
 │   │   │   ├── SiteConfigManager.vue  # 站点配置管理
 │   │   │   ├── SmtpManager.vue        # SMTP邮件服务管理
 │   │   │   ├── SongDownloadDialog.vue # 歌曲下载弹窗
@@ -381,18 +376,26 @@ VoiceHub/
 │   │   │   └── NotificationSettings.vue # 通知设置
 │   │   ├── Songs/             # 歌曲相关组件
 │   │   │   ├── DuplicateSongModal.vue # 重复歌曲处理对话框
-│   │   │   ├── RequestForm.vue        # 点歌表单
-│   │   │   ├── ScheduleList.vue       # 排期列表展示
-│   │   │   ├── SongList.vue           # 歌曲列表
+│   │   │   ├── ImportSongsModal.vue   # 导入歌曲弹窗
 │   │   │   ├── NeteaseLoginModal.vue  # 网易云音乐登录弹窗
 │   │   │   ├── PlaylistSelectionModal.vue # 歌单选择弹窗
+│   │   │   ├── PodcastEpisodesModal.vue # 播客节目弹窗
 │   │   │   ├── RecentSongsModal.vue   # 最近播放弹窗
-│   │   │   └── PodcastEpisodesModal.vue # 播客节目弹窗
+│   │   │   ├── RequestForm.vue        # 点歌表单
+│   │   │   ├── ScheduleList.vue       # 排期列表展示
+│   │   │   └── SongList.vue           # 歌曲列表
 │   │   ├── UI/                # 通用UI组件
 │   │   │   ├── AudioPlayer/   # 音频播放器组件模块
 │   │   │   │   ├── AudioElement.vue   # 音频元素组件
 │   │   │   │   ├── PlayerControls.vue # 播放器控制组件
 │   │   │   │   └── PlayerInfo.vue     # 播放器信息组件
+│   │   │   ├── Common/        # 通用UI组件
+│   │   │   │   ├── CustomSelect.vue   # 自定义选择器
+│   │   │   │   ├── DataTable.vue      # 通用数据表格组件
+│   │   │   │   ├── ErrorBoundary.vue  # 错误边界组件
+│   │   │   │   ├── LoadingState.vue   # 加载状态组件
+│   │   │   │   ├── SearchFilter.vue   # 搜索过滤组件
+│   │   │   │   └── StatCard.vue       # 统计卡片组件
 │   │   │   ├── AppleMusicLyrics.vue   # 类Apple Music风格歌词显示组件
 │   │   │   ├── AudioPlayer.vue        # 主音频播放器组件
 │   │   │   ├── ConfirmDialog.vue      # 确认对话框
@@ -403,7 +406,8 @@ VoiceHub/
 │   │   │   ├── NotificationContainer.vue # 通知容器组件
 │   │   │   ├── PageTransition.vue     # 页面过渡动画
 │   │   │   └── ProgressBar.vue        # 进度条组件
-│   │   └── year-review/       # 年度回顾组件
+│   │   ├── year-review/       # 年度回顾组件
+│   │   └── SiteFooter.vue         # 站点页脚
 │   ├── composables/           # Vue 3 组合式API
 │   │   ├── useAdmin.ts         # 管理员功能hooks
 │   │   ├── useAudioPlayer.ts   # 音频播放器hooks
@@ -417,17 +421,17 @@ VoiceHub/
 │   │   ├── useErrorHandler.ts  # 错误处理hooks
 │   │   ├── useLyricPlayer.ts   # 类Apple Music风格歌词播放器hooks
 │   │   ├── useLyrics.ts        # 歌词功能hooks
-│   │   ├── useMediaSession.ts  # 媒体会话API hooks（浏览器SMTC支持）
+│   │   ├── useMediaSession.ts  # 媒体会话API hooks
 │   │   ├── useMusicSources.ts    # 音乐源管理hooks
 │   │   ├── useMusicWebSocket.ts  # 音乐WebSocket hooks
 │   │   ├── useNotifications.ts # 通知功能hooks
 │   │   ├── usePermissions.ts   # 权限管理hooks
-│   │   ├── useProgress.ts      # 进度条功能hooks
+│   │   ├── useProgress.ts      # 进度管理hooks
 │   │   ├── useProgressEvents.ts # 进度事件hooks
 │   │   ├── useRequestDedup.ts  # 请求去重hooks
 │   │   ├── useSemesters.ts     # 学期管理hooks
 │   │   ├── useSiteConfig.js    # 站点配置hooks
-│   │   ├── useSongs.ts         # 歌曲功能hooks
+│   │   ├── useSongs.ts         # 歌曲管理hooks
 │   │   └── useToast.ts         # Toast提示hooks
 │   ├── drizzle/               # 数据库相关
 │   │   ├── db.ts               # 数据库连接
@@ -453,10 +457,6 @@ VoiceHub/
 ├── server/                # 服务端代码
 │   ├── api/                # API路由
 │   │   ├── admin/          # 管理员API
-│   │   │   ├── activities.get.ts    # 活动管理API
-│   │   │   ├── analytics/           # 数据分析API
-│   │   │   │   ├── prediction/      # 预测分析子目录
-│   │   │   │   └── reports/         # 报告生成子目录
 │   │   │   ├── api-keys/            # API密钥管理API
 │   │   │   │   ├── [id].delete.ts   # 删除API密钥
 │   │   │   │   ├── [id].get.ts      # 获取API密钥详情
@@ -467,9 +467,11 @@ VoiceHub/
 │   │   │   ├── backup/              # 备份管理API
 │   │   │   │   ├── delete/          # 删除备份子目录
 │   │   │   │   ├── download/        # 下载备份子目录
+│   │   │   │   ├── clear.post.ts    # 清空备份历史
 │   │   │   │   ├── download.get.ts  # 下载备份
 │   │   │   │   ├── export.post.ts   # 创建备份
 │   │   │   │   ├── list.get.ts      # 获取备份列表
+│   │   │   │   ├── restore-chunk.post.ts # 恢复备份分片
 │   │   │   │   ├── restore.post.ts  # 恢复备份
 │   │   │   │   └── upload.post.ts   # 上传备份文件
 │   │   │   ├── blacklist/           # 黑名单管理API
@@ -491,31 +493,25 @@ VoiceHub/
 │   │   │   │   └── preview.post.ts  # 预览邮件模板
 │   │   │   ├── fix-sequence.post.ts # 修复数据库序列
 │   │   │   ├── mark-played.post.ts  # 标记歌曲已播放
-│   │   │   ├── music-sources/       # 音乐源管理API
-│   │   │   │   └── [id]/            # 音乐源详情操作子目录
 │   │   │   ├── notifications/       # 管理员通知API
-│   │   │   │   ├── history/         # 通知历史子目录
 │   │   │   │   └── send.post.ts     # 发送通知
-│   │   │   ├── permissions/         # 权限管理API
-│   │   │   │   └── user/            # 用户权限管理子目录
 │   │   │   ├── play-times/          # 播放时间管理API
 │   │   │   │   ├── [id].ts          # 播放时间操作
 │   │   │   │   ├── index.post.ts    # 创建播放时间
 │   │   │   │   └── index.ts         # 播放时间列表
+│   │   │   ├── replay-requests/     # 重播申请管理API
+│   │   │   │   ├── index.get.ts     # 获取重播申请列表
+│   │   │   │   └── reject.post.ts   # 拒绝重播申请
 │   │   │   ├── request-times/       # 点歌时间管理API
 │   │   │   │   ├── [id].ts          # 点歌时间操作
 │   │   │   │   ├── index.post.ts    # 创建点歌时间
 │   │   │   │   └── index.ts         # 点歌时间列表
-│   │   │   ├── roles/               # 角色管理API
-│   │   │   │   └── [id]/            # 角色详情操作子目录
 │   │   │   ├── schedule/            # 排期管理API
 │   │   │   │   ├── bulk-publish.post.ts # 批量发布排期
 │   │   │   │   ├── draft.post.ts    # 保存排期草稿
 │   │   │   │   ├── full.get.ts      # 获取完整排期数据（包含草稿）
 │   │   │   │   ├── publish.post.ts  # 发布排期草稿
-│   │   │   │   ├── reject-replay.post.ts # 拒绝重播申请
 │   │   │   │   ├── remove.post.ts   # 移除排期
-│   │   │   │   ├── replay-requests.get.ts # 获取重播申请列表
 │   │   │   │   └── sequence.post.ts # 更新排期顺序
 │   │   │   ├── schedule.post.ts     # 创建排期
 │   │   │   ├── semesters/           # 学期管理API
@@ -530,6 +526,7 @@ VoiceHub/
 │   │   │   │   ├── delete.post.ts   # 删除歌曲
 │   │   │   │   └── reject.post.ts  # 驳回歌曲
 │   │   │   ├── stats.get.ts         # 统计数据
+│   │   │   ├── activities.get.ts    # 活动管理API
 │   │   │   ├── stats/               # 详细统计API
 │   │   │   │   ├── active-users.get.ts # 活跃用户统计
 │   │   │   │   ├── realtime.get.ts  # 实时统计
@@ -542,8 +539,10 @@ VoiceHub/
 │   │   │   │   └── index.ts         # 获取系统设置
 │   │   │   └── users/               # 用户管理API
 │   │   │       ├── [id]/            # 用户详情操作子目录
+│   │   │       │   ├── reset-password.post.ts # 重置用户密码
 │   │   │       │   ├── songs.get.ts     # 获取用户点歌记录
-│   │   │       │   └── status-logs.get.ts # 获取用户状态变更日志
+│   │   │       │   ├── status-logs.get.ts # 获取用户状态变更日志
+│   │   │       │   └── status.put.ts    # 更新用户状态
 │   │   │       ├── [id].delete.ts   # 删除用户
 │   │   │       ├── [id].put.ts      # 更新用户
 │   │   │       ├── [id].ts          # 用户详情
@@ -551,7 +550,6 @@ VoiceHub/
 │   │   │       ├── batch-status.put.ts # 批量状态更新
 │   │   │       ├── batch-update.post.ts # 批量更新用户
 │   │   │       ├── batch.post.ts    # 批量操作用户
-│   │   │       ├── excel-batch-update/ # Excel批量更新子目录
 │   │   │       ├── index.get.ts     # 获取用户列表
 │   │   │       ├── index.post.ts    # 创建用户
 │   │   │       ├── index.ts         # 用户管理
@@ -602,7 +600,8 @@ VoiceHub/
 │   │   ├── proxy/          # 代理服务API
 │   │   │   └── image.get.ts         # 图片代理（解决HTTP/HTTPS混合内容及跨域问题）
 │   │   ├── semesters/      # 学期API
-│   │   │   └── current.get.ts       # 获取当前学期
+│   │   │   ├── current.get.ts       # 获取当前学期
+│   │   │   └── options.get.ts       # 获取学期选项
 │   │   ├── site-config.get.ts       # 站点配置API
 │   │   ├── songs/          # 歌曲相关API
 │   │   │   ├── [id]/                # 歌曲详情操作
@@ -612,6 +611,7 @@ VoiceHub/
 │   │   │   │   └── reply.post.ts    # 处理联合投稿邀请
 │   │   │   ├── add.post.ts          # 添加歌曲
 │   │   │   ├── count.get.ts         # 歌曲统计
+│   │   │   ├── import.post.ts       # 导入歌曲
 │   │   │   ├── index.get.ts         # 歌曲列表
 │   │   │   ├── public.get.ts        # 公开歌曲列表
 │   │   │   ├── request.post.ts      # 点歌请求
